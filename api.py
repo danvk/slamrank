@@ -94,5 +94,12 @@ class Rankings(object):
             self._rankings.append(RankedPlayer(p, rank, points))
 
 
+class Tournament(object):
+    def __init__(self, wikiUrl):
+        # TODO: Parse the wiki markup using mwparserfromhell.
+        # See https://github.com/earwig/mwparserfromhell/issues/84
+        pass
+
+
 if __name__ == '__main__':
     rankings = Rankings()
