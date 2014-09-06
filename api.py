@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding: utf-8
 
 # Bits of information I need:
 # - Player rankings
@@ -7,6 +8,7 @@
 
 import re
 
+import mwparserfromhell
 import requests
 import requests_cache
 from bs4 import BeautifulSoup
@@ -95,10 +97,20 @@ class Rankings(object):
 
 
 class Tournament(object):
-    def __init__(self, wikiUrl):
+    API_URL = "http://en.wikipedia.org/w/api.php"
+
+    def __init__(self, wikiTitle):
         # TODO: Parse the wiki markup using mwparserfromhell.
         # See https://github.com/earwig/mwparserfromhell/issues/84
-        pass
+        r = requests.get(Tournament.API_URL, params={
+            'action': 'query',
+            'prop': 'revisions',
+            'rvlimit': 1,
+            'rvprop': 'content',
+            'format': 'json',
+            'titles': wikiTitle})
+        wikitext = r.json()["query"]["pages"].values()[0]["revisions"][0]["*"]
+        self.wikicode = mwparserfromhell.parse(wikitext)
 
 
 if __name__ == '__main__':
