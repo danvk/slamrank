@@ -6,6 +6,8 @@
 # - How each player did in last year's tournament
 # - What the draw looks like this year
 
+from collections import OrderedDict
+from itertools import groupby, ifilter
 import re
 
 import mwparserfromhell
@@ -102,8 +104,19 @@ class Rankings(object):
 
 class Tournament(object):
     API_URL = "http://en.wikipedia.org/w/api.php"
+    AUSTRALIAN = 'Australian Open'
+    FRENCH = 'French Open'
+    WIMBLEDON = 'Wimbledon'
+    US_OPEN = 'US Open'
 
-    def __init__(self, wikiTitle):
+    def __init__(self, year, tournament):
+        assert tournament in [
+                Tournament.AUSTRALIAN,
+                Tournament.FRENCH,
+                Tournament.WIMBLEDON,
+                Tournament.US_OPEN]
+        assert 1884 <= year <= 2050
+
         # TODO: Parse the wiki markup using mwparserfromhell.
         # See https://github.com/earwig/mwparserfromhell/issues/84
         r = requests.get(Tournament.API_URL, params={
@@ -112,18 +125,69 @@ class Tournament(object):
             'rvlimit': 1,
             'rvprop': 'content',
             'format': 'json',
-            'titles': wikiTitle})
+            'titles': Tournament._make_url(year, tournament)})
         wikitext = r.json()["query"]["pages"].values()[0]["revisions"][0]["*"]
         wikicode = mwparserfromhell.parse(wikitext)
 
         self._extract_from_wikicode(wikicode)
 
+
+    def getResultForPlayer(self, p):
+        name = p.name
+        facts = filter(lambda f: f[2] == name, self._facts)
+        rounds = [r[0] for r in facts]
+        return rounds
+
+    @staticmethod
+    def _make_url(year, tournament):
+        return "%s %s – Men's Singles" % (year, tournament)
+
     def _extract_from_wikicode(self, wikicode):
-        facts = ()
+        facts = []
+        items = []
 
         for section in wikicode.get_sections():
             wc = mwparserfromhell.parse(section.encode('utf8'))
             templates = wc.filter_templates()
+            bracket = next(ifilter(lambda t: 'Bracket' in t.name, templates), None)
+            if bracket:
+                items.append(bracket)
+        brackets = [key for key,_ in groupby(items)]
+        self._brackets = brackets
+        for bracket in brackets:
+            facts.extend(Tournament._facts_from_bracket(bracket))
+
+        self._facts = facts
+
+    @staticmethod
+    def _facts_from_bracket(bracket):
+        rounds = {}
+        try:
+            for i in range(1, 7):
+                p = bracket.get('RD%s' % i)
+                rounds[unicode(p.name.strip())] = p.value.strip()
+        except ValueError:
+            pass  # no such round
+
+        facts = []
+        for p in bracket.params:
+            k, v = p.name.strip(), p.value.strip()
+            m = re.match(r'(RD\d+)-team(\d+)', unicode(k))
+            if m:
+                roundId, slot = m.groups()
+
+                roundName = rounds[roundId]
+
+                w = mwparserfromhell.parse(v.encode('utf8'))
+                # need to strip out {{nowrap}} templates
+                playerName = re.sub(r'\|.*', '', w.strip_code().strip())
+
+                flag_template = next(ifilter(lambda t: 'flagicon' == t.name, w.filter_templates()))
+                nationality = flag_template.params[0].value
+
+                facts.append((roundName, slot, playerName, nationality))
+
+        return facts
 
 
 if __name__ == '__main__':
