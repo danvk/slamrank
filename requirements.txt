@@ -2,3 +2,4 @@ requests
 requests-cache
 beautifulsoup4
 mwparserfromhell
+nose

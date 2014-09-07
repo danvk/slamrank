@@ -57,6 +57,10 @@ class Player(object):
         self.name = name
         self.nationality = nationality
 
+    @staticmethod
+    def get(name):
+        return _player_pool.getPlayer(name)
+
 
 class RankedPlayer(object):
     def __init__(self, player, rank, points):
@@ -110,7 +114,16 @@ class Tournament(object):
             'format': 'json',
             'titles': wikiTitle})
         wikitext = r.json()["query"]["pages"].values()[0]["revisions"][0]["*"]
-        self.wikicode = mwparserfromhell.parse(wikitext)
+        wikicode = mwparserfromhell.parse(wikitext)
+
+        self._extract_from_wikicode(wikicode)
+
+    def _extract_from_wikicode(self, wikicode):
+        facts = ()
+
+        for section in wikicode.get_sections():
+            wc = mwparserfromhell.parse(section.encode('utf8'))
+            templates = wc.filter_templates()
 
 
 if __name__ == '__main__':
