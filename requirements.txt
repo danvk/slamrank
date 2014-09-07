@@ -1,5 +1,5 @@
 requests
 requests-cache
 beautifulsoup4
-mwparserfromhell
 nose
+-e git+https://github.com/earwig/mwparserfromhell.git#egg=mwparserfromhell

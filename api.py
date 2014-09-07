@@ -127,7 +127,7 @@ class Tournament(object):
             'format': 'json',
             'titles': Tournament._make_url(year, tournament)})
         wikitext = r.json()["query"]["pages"].values()[0]["revisions"][0]["*"]
-        wikicode = mwparserfromhell.parse(wikitext)
+        wikicode = mwparserfromhell.parse(wikitext, skip_style_tags=True)
 
         self._extract_from_wikicode(wikicode)
 
@@ -146,15 +146,10 @@ class Tournament(object):
         facts = []
         items = []
 
-        for section in wikicode.get_sections():
-            wc = mwparserfromhell.parse(section.encode('utf8'))
-            templates = wc.filter_templates()
-            bracket = next(ifilter(lambda t: 'Bracket' in t.name, templates), None)
-            if bracket:
-                items.append(bracket)
-        brackets = [key for key,_ in groupby(items)]
-        self._brackets = brackets
-        for bracket in brackets:
+        templates = wikicode.filter_templates()
+        self._brackets = []
+        for bracket in filter(lambda t: 'Bracket' in t.name, templates):
+            self._brackets.append(bracket)
             facts.extend(Tournament._facts_from_bracket(bracket))
 
         self._facts = facts
@@ -178,6 +173,7 @@ class Tournament(object):
 
                 roundName = rounds[roundId]
 
+                # TODO: don't re-parse
                 w = mwparserfromhell.parse(v.encode('utf8'))
                 # need to strip out {{nowrap}} templates
                 playerName = re.sub(r'\|.*', '', w.strip_code().strip())
