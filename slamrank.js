@@ -1,3 +1,69 @@
+// Replace all "null" entries with the higher-ranked player
+function fillBracket(matches) {
+  var matches = JSON.parse(JSON.stringify(matches));
+  for (var i = 1; i < matches.length; i++) {
+    var match_list = matches[i];
+    for (var j = 0; j < match_list.length; j++) {
+      for (var k = 0; k < 2; k++) {
+        if (match_list[j][k] == null) {
+          var prev_match = matches[i-1][j * 2 + k];
+          match_list[j][k] = Math.min(prev_match[0], prev_match[1]);
+        }
+      }
+    }
+  }
+  return matches;
+}
+
+// Number of ranking points you earn for getting to each round.
+var ROUND_POINTS = [
+  10,
+  45,
+  90,
+  180,
+  360,
+  720,
+  1200,
+  2000
+];
+
+// Returns a list of new point values for each player
+function playerPoints(matches) {
+  var points = new Array(128);
+  matches.forEach((match_list, round_idx) => {
+    match_list.forEach(match => {
+      var [p1, p2] = match;
+      if (p1 !== null) points[p1] = ROUND_POINTS[round_idx];
+      if (p2 !== null) points[p2] = ROUND_POINTS[round_idx];
+    });
+  });
+  return points;
+}
+
+// Add "next week" data to the ranking table in light of tourney results.
+// This adds points_gaining, new_points and new_rank fields.
+function updateRankings(players, matches) {
+  var players = JSON.parse(JSON.stringify(players));
+  var points = playerPoints(matches);
+  players.forEach((p, i) => {
+    p.points_gaining = points[i];
+    p.new_points = p.points - p.points_dropping + p.points_gaining;
+  });
+
+  var point_indices = _.chain(players)
+                       .map((p, i) => [p.new_points, i])
+                       .sortBy(x => -x[0])
+                       .map((x, i) => [x[1], 1 + i])
+                       .object()
+                       .value();
+
+  players.forEach((p, i) => {
+    p.new_rank = point_indices[i];
+  });
+
+  return players;
+}
+
 var RankingRow = React.createClass({
   render: function() {
     var player = this.props.player;
@@ -7,6 +73,9 @@ var RankingRow = React.createClass({
         <td>{player.name}</td>
         <td>{player.points}</td>
         <td>{player.points_dropping}</td>
+        <td>{player.points_gaining}</td>
+        <td>{player.new_points}</td>
+        <td>{player.new_rank}</td>
       </tr>
     );
   }
@@ -23,6 +92,9 @@ var RankingTable = React.createClass({
             <th>Player</th>
             <th>Points</th>
             <th>Dropping</th>
+            <th>Gaining</th>
+            <th>New Pts</th>
+            <th>New Rank</th>
           </tr>
         </thead>
         <tbody>
@@ -77,5 +149,22 @@ var Bracket = React.createClass({
   }
 });
 
-// React.render(<RankingTable players={data.players} />, document.getElementById('root'));
-React.render(<Bracket matches={data.matches.slice(3)} players={data.players} />, document.getElementById('root'));
+var Root = React.createClass({
+  propTypes: {
+    data: React.PropTypes.object.isRequired
+  },
+  render: function() {
+    var players = this.props.data.players;
+    var matches = this.props.data.matches;
+    matches = fillBracket(matches);
+    players = updateRankings(players, matches);
+    return (
+      <div>
+        <Bracket matches={matches.slice(3)} players={players} />
+        <RankingTable players={players} />
+      </div>
+    );
+  }
+});
+
+React.render(<Root data={data} />, document.getElementById('root'));
