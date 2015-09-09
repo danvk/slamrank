@@ -10,6 +10,7 @@ from collections import OrderedDict
 from itertools import groupby, ifilter
 import re
 from datetime import datetime
+import json
 
 import mwparserfromhell
 import requests
@@ -48,6 +49,7 @@ class PlayerPool(object):
         candidates = [p for p in self._players if p.name in names]
         if len(candidates) == 0:
             raise KeyError(u'No player named %s in cache.' % player_name)
+        assert len(candidates) == 1
         return candidates[0]
 
     def addPlayer(self, player):
@@ -102,6 +104,15 @@ class RankedPlayer(object):
         return '#%s %s (%s, %s dropping %s)' % (
                 self.rank, self.name, self.nationality, self.points, self.points_dropping)
 
+    def to_json(self):
+        return {
+            'name': self.name,
+            'nationality': self.nationality,
+            'rank': self.rank,
+            'points': self.points,
+            'points_dropping': self.points_dropping
+        }
+
 
 class Rankings(object):
     def __init__(self):
@@ -114,7 +125,10 @@ class Rankings(object):
 
     def ranking_for_player(self, player_name):
         p = _player_pool.get_player(player_name)
-        ps = [r for r in self._rankings if r.player == p]
+        return self.ranked_player(p)
+
+    def ranked_player(self, player):
+        ps = [r for r in self._rankings if r.player == player]
         return ps[0]
 
     def _parseRankings(self, html):
@@ -147,6 +161,16 @@ class Tournament(object):
     WIMBLEDON = 'Wimbledon'
     US_OPEN = 'US Open'
 
+    ROUND_INDICES = {
+      'First Round': 0,
+      'Second Round': 1,
+      'Third Round': 2,
+      'Fourth Round': 3,
+      'Quarterfinals': 4,
+      'Semifinals': 5,
+      'Final': 6
+    }
+
     def __init__(self, year, tournament):
         assert tournament in [
                 Tournament.AUSTRALIAN,
@@ -169,23 +193,14 @@ class Tournament(object):
 
         self._extract_from_wikicode(wikicode)
 
-    def get_result_for_player(self, p):
-        name = p.name
-        facts = filter(lambda f: f[2] == name, self._facts)
-        rounds = [r[0] for r in facts]
-        return rounds
+    def get_last_round_for_player(self, player):
+        for idx, players in reversed(list(enumerate(self._rounds))):
+            if player in players:
+                return idx
+        raise KeyError('Player %s is not in this tournament' % player)
 
     def players(self):
-        players = set()
-        for i, fact in enumerate(self._facts):
-            name = fact[2]
-            name_no_accents = unidecode(name)
-            try:
-                player = Player.get(name_no_accents)
-                players.add(player)
-            except KeyError:
-                print 'Missing %s' % name_no_accents
-        return players
+        return set((p for _, _, p in self._facts if p))
 
     @staticmethod
     def _make_url(year, tournament):
@@ -197,9 +212,13 @@ class Tournament(object):
 
         templates = wikicode.filter_templates()
         self._brackets = []
+        self._rounds = [[] for i in range(0, 7)]
         for bracket in filter(lambda t: 'Bracket' in t.name, templates):
             self._brackets.append(bracket)
-            facts.extend(Tournament._facts_from_bracket(bracket))
+            section_facts = Tournament._facts_from_bracket(bracket)
+            for round_name, _, player in section_facts:
+                self._rounds[Tournament.ROUND_INDICES[round_name]].append(player)
+            facts.extend(section_facts)
 
         self._facts = facts
 
@@ -211,12 +230,15 @@ class Tournament(object):
             raise UnfilledException(team_value)
         name = links[0].title.strip_code()
         name = re.sub(r' \(.*', '', name)  # e.g. 'Kevin Anderson (tennis)'
+        name_no_accents = unidecode(name)
+        player = Player.get(name_no_accents)
 
         flags = [t for t in team_value.filter_templates() if t.name == 'flagicon']
         assert len(flags) == 1
         nationality = flags[0].params[0]
+        assert player.nationality == nationality
 
-        return name, nationality
+        return player
 
     @staticmethod
     def _facts_from_bracket(bracket):
@@ -238,12 +260,27 @@ class Tournament(object):
                 roundName = rounds[roundId]
 
                 try:
-                    name, nationality = Tournament._facts_from_team(v)
-                    facts.append((roundName, slot, name, nationality))
+                    player = Tournament._facts_from_team(v)
+                    facts.append((roundName, slot, player))
                 except UnfilledException:
-                    pass
+                    facts.append((roundName, slot, None))
 
         return facts
+
+    def to_json(self, rankings):
+        players = list((rankings.ranked_player(p) for p in self.players()))
+        players.sort(key=lambda p: p.rank)
+
+        player_to_idx = {rp.player: idx for idx, rp in enumerate(players)}
+
+        # this is a list of players in each round
+        rounds = [[player_to_idx.get(p) if p else None for p in rnd] for rnd in self._rounds]
+        matches = [zip(ps[::2], ps[1::2]) for ps in rounds]
+
+        return {
+            'players': [p.to_json() for p in players],
+            'matches': matches
+        }
 
 
 def load_players_and_tourney(year, tournament):
@@ -253,4 +290,5 @@ def load_players_and_tourney(year, tournament):
 
 
 if __name__ == '__main__':
-    rankings = Rankings()
+    rankings, tourney = load_players_and_tourney(2015, 'US Open')
+    open('2015usopen.js', 'wb').write((u'var data = %s;' % json.dumps(tourney.to_json(rankings), indent=2)).encode('utf8'))
