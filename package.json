@@ -1,0 +1,22 @@
+{
+  "name": "slamrank",
+  "version": "1.0.0",
+  "description": "Explore the effects of a Grand Slam on rankings",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/danvk/slamrank.git"
+  },
+  "keywords": [
+    "tennis"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/danvk/slamrank/issues"
+  },
+  "homepage": "https://github.com/danvk/slamrank#readme"
+}

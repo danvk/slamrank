@@ -1,0 +1,14 @@
+.match {
+  background: hotpink;
+  border-left: 2px solid transparent;
+}
+.match-cell {
+  position: relative;
+}
+.connector {
+  background: black;
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  width: 2px;
+}

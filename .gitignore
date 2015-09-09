@@ -53,3 +53,5 @@ coverage.xml
 docs/_build/
 
 .cache.sqlite
+
+node_modules
