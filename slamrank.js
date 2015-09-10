@@ -133,7 +133,6 @@ var Root = React.createClass({
     this.setState(this.stateWithModifications([]));
   },
   stateWithModifications: function(modifications) {
-    console.log(modifications);
     var originalMatches = this.props.data.matches;
     var [newMatches, winner] = applyModificationsAndFill(originalMatches, modifications);
     return {

@@ -1,5 +1,5 @@
 // Replace all "null" entries with the higher-ranked player
-function fillBracket(matches) {
+function fillBracket(matches, winner) {
   var matches = JSON.parse(JSON.stringify(matches));
   for (var i = 1; i < matches.length; i++) {
     var match_list = matches[i];
@@ -13,8 +13,10 @@ function fillBracket(matches) {
     }
   }
 
-  var last_match = matches[matches.length - 1][0];
-  var winner = Math.min(last_match[0], last_match[1]);
+  var finals = matches[matches.length - 1][0];
+  if (winner != finals[0] && winner != finals[1]) {
+    winner = Math.min(finals[0], finals[1]);
+  }
 
   return [matches, winner];
 }
@@ -22,6 +24,20 @@ function fillBracket(matches) {
 
 function nextSlot(i, j, k) {
   return [i + 1, Math.floor(j / 2), j % 2];
+}
+
+// Remove a player from the tournament start with a particular round.
+function clearPlayer(matches, playerId, startingWithRound) {
+  for (var i = startingWithRound; i < matches.length; i++) {
+    var match_list = matches[i];
+    for (var j = 0; j < match_list.length; j++) {
+      for (var k = 0; k < 2; k++) {
+        if (match_list[j][k] == playerId) {
+          match_list[j][k] = null;
+        }
+      }
+    }
+  }
 }
 
 function applyModifications(matches, modifications) {
@@ -48,18 +64,7 @@ function applyModifications(matches, modifications) {
             var oldWinner = nextMatch[j % 2];
             nextMatch[j % 2] = mod.playerId;
             if (oldWinner != mod.playerId) {
-              // Clear out their future wins.
-              var nj = Math.floor(j / 2);
-              for (var ni = i + 1; ni < matches.length; ni++) {
-                var nextMatch = matches[ni][Math.floor(nj / 2)];
-                var nextOldWinner = nextMatch[nj % 2];
-                if (nextOldWinner == oldWinner) {
-                  nextMatch[nj % 2] = null;
-                  nj = Math.floor(nj / 2);
-                } else {
-                  break;
-                }
-              }
+              clearPlayer(matches, oldWinner, i + 1);
             }
           }
         }
@@ -73,17 +78,12 @@ function applyModifications(matches, modifications) {
 // Apply a set of modifications to matches, returning [newMatches, winner].
 function applyModificationsAndFill(matches, modifications) {
   var winner;
-  [matches, winner] = applyModifications(matches, modifications);
-
-  var finals = matches[matches.length - 1][0];
-  if (winner != finals[0] && winner != finals[1]) {
-    winner = -1;  // invalidate the old winner.
+  for (var i = 0; i < modifications.length; i++) {
+    [matches, winner] = fillBracket(matches, winner);
+    [matches, winner] = applyModifications(matches, [modifications[i]]);
   }
-
-  // Now fill-forward with the higher-seeded player.
-  var [newMatches, newWinner] = fillBracket(matches);
-
-  return [newMatches, winner >= 0 ? winner : newWinner];
+  [matches, winner] = fillBracket(matches, winner);
+  return [matches, winner];
 }
 
 // Number of ranking points you earn for getting to each round.
