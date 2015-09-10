@@ -12,7 +12,12 @@ function fillBracket(matches) {
       }
     }
   }
-  return matches;
+
+  var last_match = matches[matches.length - 1][0];
+  console.log(last_match);
+  var winner = Math.min(last_match[0], last_match[1]);
+
+  return [matches, winner];
 }
 
 // Number of ranking points you earn for getting to each round.
@@ -28,7 +33,7 @@ var ROUND_POINTS = [
 ];
 
 // Returns a list of new point values for each player
-function playerPoints(matches) {
+function playerPoints(matches, winner) {
   var points = new Array(128);
   matches.forEach((match_list, round_idx) => {
     match_list.forEach(match => {
@@ -37,14 +42,17 @@ function playerPoints(matches) {
       if (p2 !== null) points[p2] = ROUND_POINTS[round_idx];
     });
   });
+  if (winner !== null && winner !== undefined) {
+    points[winner] = ROUND_POINTS[matches.length];
+  }
   return points;
 }
 
 // Add "next week" data to the ranking table in light of tourney results.
 // This adds points_gaining, new_points and new_rank fields.
-function updateRankings(players, matches) {
+function updateRankings(players, matches, winner) {
   var players = JSON.parse(JSON.stringify(players));
-  var points = playerPoints(matches);
+  var points = playerPoints(matches, winner);
   players.forEach((p, i) => {
     p.points_gaining = points[i];
     p.new_points = p.points - p.points_dropping + p.points_gaining;
@@ -107,14 +115,23 @@ var RankingTable = React.createClass({
 
 var Match = React.createClass({
   propTypes: {
-    players: React.PropTypes.array.isRequired
+    players: React.PropTypes.array.isRequired,
+    winner: React.PropTypes.number  // player ID
   },
   render: function() {
     var players = this.props.players;
+    var playerSpans = players.map(p => <span>{p ? p.name : '\u00a0'}</span>);
+    var winner = this.props.winner;
+    if (winner !== null && winner !== undefined) {
+      players.forEach((p, i) => {
+        if (p && p.index == winner) playerSpans[i] = <b>{playerSpans[i]}</b>;
+      });
+    }
     return (
       <div className="match">
-        {players[0] ? players[0].name : '\u00a0'}<br/>
-        {players[1] ? players[1].name : '\u00a0'}
+        {playerSpans[0]}
+        <br/>
+        {playerSpans[1]}
       </div>
     );
   }
@@ -123,7 +140,8 @@ var Match = React.createClass({
 var Bracket = React.createClass({
   propTypes: {
     matches: React.PropTypes.array.isRequired,
-    players: React.PropTypes.array.isRequired
+    players: React.PropTypes.array.isRequired,
+    winner: React.PropTypes.number
   },
   render: function() {
     var {matches, players} = this.props;
@@ -133,9 +151,10 @@ var Bracket = React.createClass({
       for (var i = 0; i < matches.length; i++, factor *= 2) {
         if (idx % factor == 0) {
           var match = matches[i][idx / factor];
+          var winner = i == matches.length - 1 ? this.props.winner : null;
           row_cells.push(<td className="match-cell" key={i} rowSpan={factor}>
             {i > 0 ? <div className="connector"></div> : null}
-            <Match players={match.map(x => players[x])} />
+            <Match players={match.map(x => players[x])} winner={winner} />
           </td>);
         }
       }
@@ -156,15 +175,17 @@ var Root = React.createClass({
   render: function() {
     var players = this.props.data.players;
     var matches = this.props.data.matches;
-    matches = fillBracket(matches);
-    players = updateRankings(players, matches);
+    var [fullMatches, winner] = fillBracket(matches);
+    players = updateRankings(players, fullMatches, winner);
+    console.log(winner);
     return (
       <div>
-        <Bracket matches={matches.slice(3)} players={players} />
+        <Bracket matches={fullMatches.slice(3)} winner={winner} players={players} />
         <RankingTable players={players} />
       </div>
     );
   }
 });
 
+data.players.forEach((p, i) => { p.index = i; });
 React.render(<Root data={data} />, document.getElementById('root'));
