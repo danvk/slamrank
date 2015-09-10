@@ -18,5 +18,8 @@
   "bugs": {
     "url": "https://github.com/danvk/slamrank/issues"
   },
-  "homepage": "https://github.com/danvk/slamrank#readme"
+  "homepage": "https://github.com/danvk/slamrank#readme",
+  "devDependencies": {
+    "chai": "^3.2.0"
+  }
 }

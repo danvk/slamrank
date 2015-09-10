@@ -1,76 +1,4 @@
-// Replace all "null" entries with the higher-ranked player
-function fillBracket(matches) {
-  var matches = JSON.parse(JSON.stringify(matches));
-  for (var i = 1; i < matches.length; i++) {
-    var match_list = matches[i];
-    for (var j = 0; j < match_list.length; j++) {
-      for (var k = 0; k < 2; k++) {
-        if (match_list[j][k] == null) {
-          var prev_match = matches[i-1][j * 2 + k];
-          match_list[j][k] = Math.min(prev_match[0], prev_match[1]);
-        }
-      }
-    }
-  }
-
-  var last_match = matches[matches.length - 1][0];
-  console.log(last_match);
-  var winner = Math.min(last_match[0], last_match[1]);
-
-  return [matches, winner];
-}
-
-// Number of ranking points you earn for getting to each round.
-var ROUND_POINTS = [
-  10,
-  45,
-  90,
-  180,
-  360,
-  720,
-  1200,
-  2000
-];
-
-// Returns a list of new point values for each player
-function playerPoints(matches, winner) {
-  var points = new Array(128);
-  matches.forEach((match_list, round_idx) => {
-    match_list.forEach(match => {
-      var [p1, p2] = match;
-      if (p1 !== null) points[p1] = ROUND_POINTS[round_idx];
-      if (p2 !== null) points[p2] = ROUND_POINTS[round_idx];
-    });
-  });
-  if (winner !== null && winner !== undefined) {
-    points[winner] = ROUND_POINTS[matches.length];
-  }
-  return points;
-}
-
-// Add "next week" data to the ranking table in light of tourney results.
-// This adds points_gaining, new_points and new_rank fields.
-function updateRankings(players, matches, winner) {
-  var players = JSON.parse(JSON.stringify(players));
-  var points = playerPoints(matches, winner);
-  players.forEach((p, i) => {
-    p.points_gaining = points[i];
-    p.new_points = p.points - p.points_dropping + p.points_gaining;
-  });
-
-  var point_indices = _.chain(players)
-                       .map((p, i) => [p.new_points, i])
-                       .sortBy(x => -x[0])
-                       .map((x, i) => [x[1], 1 + i])
-                       .object()
-                       .value();
-
-  players.forEach((p, i) => {
-    p.new_rank = point_indices[i];
-  });
-
-  return players;
-}
+'use strict';
 
 var RankingRow = React.createClass({
   render: function() {
@@ -116,11 +44,17 @@ var RankingTable = React.createClass({
 var Match = React.createClass({
   propTypes: {
     players: React.PropTypes.array.isRequired,
-    winner: React.PropTypes.number  // player ID
+    winner: React.PropTypes.number,  // player ID
+    round: React.PropTypes.number,
+    slot: React.PropTypes.number,
+    onClick: React.PropTypes.func.isRequired
+  },
+  click: function(i) {
+    this.props.onClick(this.props.round, this.props.slot, i, this.props.players[i].index);
   },
   render: function() {
     var players = this.props.players;
-    var playerSpans = players.map(p => <span>{p ? p.name : '\u00a0'}</span>);
+    var playerSpans = players.map((p, i) => <span onClick={() => this.click(i)}>{p ? p.name : '\u00a0'}</span>);
     var winner = this.props.winner;
     if (winner !== null && winner !== undefined) {
       players.forEach((p, i) => {
@@ -141,10 +75,16 @@ var Bracket = React.createClass({
   propTypes: {
     matches: React.PropTypes.array.isRequired,
     players: React.PropTypes.array.isRequired,
-    winner: React.PropTypes.number
+    winner: React.PropTypes.number,
+    startRound: React.PropTypes.number,
+    handleAdvancePlayer: React.PropTypes.func.isRequired
+  },
+  handleClick: function(round, slot, participant, playerId) {
+    this.props.handleAdvancePlayer(playerId, round, slot);
   },
   render: function() {
     var {matches, players} = this.props;
+    var startRound = this.props.startRound || 0;
     var rows = matches[0].map((match, idx) => {
       var row_cells = [];
       var factor = 1;
@@ -154,7 +94,11 @@ var Bracket = React.createClass({
           var winner = i == matches.length - 1 ? this.props.winner : null;
           row_cells.push(<td className="match-cell" key={i} rowSpan={factor}>
             {i > 0 ? <div className="connector"></div> : null}
-            <Match players={match.map(x => players[x])} winner={winner} />
+            <Match players={match.map(x => players[x])}
+                   winner={winner}
+                   round={i + startRound}
+                   slot={idx/factor}
+                   onClick={this.handleClick} />
           </td>);
         }
       }
@@ -172,15 +116,46 @@ var Root = React.createClass({
   propTypes: {
     data: React.PropTypes.object.isRequired
   },
+  getInitialState: function() {
+    return this.stateWithModifications([]);
+  },
+  addModification: function(playerId, fromRound, fromSlot) {
+    var originalMatches = this.props.data.matches;
+    var modifications = this.state.modifications;
+    if (fromRound == originalMatches.length - 1) {
+      modifications.push({winner: playerId});
+    } else {
+      modifications.push({playerId, toRound: 1 + fromRound});
+    }
+    this.setState(this.stateWithModifications(modifications));
+  },
+  resetModifications: function() {
+    this.setState(this.stateWithModifications([]));
+  },
+  stateWithModifications: function(modifications) {
+    console.log(modifications);
+    var originalMatches = this.props.data.matches;
+    var [newMatches, winner] = applyModificationsAndFill(originalMatches, modifications);
+    return {
+      modifications,
+      matches: newMatches,
+      winner
+    };
+  },
   render: function() {
     var players = this.props.data.players;
-    var matches = this.props.data.matches;
-    var [fullMatches, winner] = fillBracket(matches);
-    players = updateRankings(players, fullMatches, winner);
-    console.log(winner);
+    var originalMatches = this.props.data.matches;
+    var matches = this.state.matches;
+    var winner = this.state.winner;
+    players = updateRankings(players, matches, winner);
     return (
       <div>
-        <Bracket matches={fullMatches.slice(3)} winner={winner} players={players} />
+        <button onClick={this.resetModifications}>Reset</button><br/>
+        <Bracket matches={matches.slice(3)}
+                 winner={winner}
+                 players={players}
+                 startRound={3}
+                 handleAdvancePlayer={this.addModification} />
         <RankingTable players={players} />
       </div>
     );
