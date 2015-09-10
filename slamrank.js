@@ -3,15 +3,24 @@
 var RankingRow = React.createClass({
   render: function() {
     var player = this.props.player;
+    var rank_delta = player.rank - player.new_rank;
+    var rank_delta_el = null;
+    if (rank_delta > 0) {
+      rank_delta_el = <span className="rank-improve">(+{rank_delta})</span>;
+    } else if (rank_delta < 0) {
+      rank_delta_el = <span className="rank-drop">(–{-rank_delta})</span>;
+    }
+    var points_delta = player.points_gaining - player.points_dropping;
     return (
       <tr>
-        <td>{player.rank}</td>
+        <td className="num">{player.rank}</td>
         <td>{player.name}</td>
-        <td>{player.points}</td>
-        <td>{player.points_dropping}</td>
-        <td>{player.points_gaining}</td>
-        <td>{player.new_points}</td>
-        <td>{player.new_rank}</td>
+        <td className="num">{player.points}</td>
+        <td className="num">{player.points_dropping}</td>
+        <td className="num">{player.points_gaining}</td>
+        <td className="num">{points_delta > 0 ? '+' : ''}{points_delta}</td>
+        <td className="num">{player.new_points}</td>
+        <td>{player.new_rank} {rank_delta_el}</td>
       </tr>
     );
   }
@@ -21,15 +30,16 @@ var RankingTable = React.createClass({
   render: function() {
     var players = this.props.players;
     return (
-      <table>
+      <table className="rankings">
         <thead>
           <tr>
-            <th>Rank</th>
+            <th className="num">Rank</th>
             <th>Player</th>
-            <th>Points</th>
-            <th>Dropping</th>
-            <th>Gaining</th>
-            <th>New Pts</th>
+            <th className="num">Points</th>
+            <th className="num">Drop</th>
+            <th className="num">Gain</th>
+            <th className="num">∆</th>
+            <th className="num">New Pts</th>
             <th>New Rank</th>
           </tr>
         </thead>
