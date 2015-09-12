@@ -100,8 +100,9 @@ var Bracket = React.createClass({
       var factor = 1;
       for (var i = 0; i < matches.length; i++, factor *= 2) {
         if (idx % factor == 0) {
-          var match = matches[i][idx / factor];
-          var winner = i == matches.length - 1 ? this.props.winner : null;
+          var slot = idx / factor;
+          var match = matches[i][slot];
+          var winner = i == matches.length - 1 ? this.props.winner : getWinnerId(matches, i, slot);
           row_cells.push(<td className="match-cell" key={i} rowSpan={factor}>
             {i > 0 ? <div className="connector"></div> : null}
             <Match players={match.map(x => players[x])}
